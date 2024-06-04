@@ -1,0 +1,8 @@
+message,control,duration
+rturn,z,1
+lturn,x,1
+hold,c,1
+down,down,1
+drop,space,1
+left,left,1
+right,right,1
