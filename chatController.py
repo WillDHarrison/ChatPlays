@@ -7,6 +7,7 @@ class ChatController:
     import keyboard
     from keyCommand import KeyCommand
     import csv
+    import threading
 
     def __init__(self, mainWindow):
         self.server = "irc.chat.twitch.tv"
@@ -19,6 +20,9 @@ class ChatController:
         self.active = False
         self.doConnect = False
         self.commands = []
+        self.commandQueue = []
+        self.queueLim = 10
+        self.t1 = self.threading.Thread(target=self.readChatCommands)
         self.mainWindow = mainWindow
         self.endKey = 'ctrl+shift+x'
         self.keyboard.add_hotkey(self.endKey, lambda: self.toggleControl())
@@ -60,6 +64,7 @@ class ChatController:
         self.sock.send(f"JOIN {self.channel}\n".encode('utf-8'))
         self.joinChat()
 
+
     def joinChat(self):
         self.mainWindow.runLabel.setText("Status: Connecting...")
         self.doConnect = False
@@ -77,11 +82,14 @@ class ChatController:
                     loading = self.loadingComplete(line)
         if self.doConnect:
             print("Running Controller")
-            self.runController()
+            if not self.t1.is_alive():
+                self.t1.start()
+            self.activateCommands()
         else:
             print("Connection Failed")
             self.mainWindow.runLabel.setText("Status: Invalid Twitch Details")
             self.endConnection()
+
 
     def loadingComplete(self, line):
         if "End of /NAMES list" in line:
@@ -114,7 +122,7 @@ class ChatController:
         return lines[-1]
     
     
-    def runController(self):
+    def readChatCommands(self):
         self.mainWindow.runLabel.setText("Status: Connected")
         while self.active:
             try:
@@ -129,10 +137,22 @@ class ChatController:
                     if command.enabled:
                         if msg.lower() == command.message.lower():
                             currentCommand.append(command)
+                            self.commandQueue.append(currentCommand)
                 if not len(currentCommand) == 0:
                     self.gameControl(currentCommand)
                 if msg != "":
                     print(username + ": " + msg)
+
+
+    def activateCommands(self):
+        while self.active:
+            if len(self.commandQueue) > 0 and len(self.commandQueue) <= self.queueLim:
+                self.gameControl(self.commandQueue.pop(0))
+            elif len(self.commandQueue) > self.queueLim:
+                avgCtrl = max(set(self.commandQueue), key=self.commandQueue.count)
+                self.gameControl(avgCtrl)
+                self.commandQueue = []
+            
 
 
     def gameControl(self, currentCommand):
